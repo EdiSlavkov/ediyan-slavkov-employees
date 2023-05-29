@@ -47,16 +47,31 @@ export default function CsvImporter() {
     };
 
     const findWhoWorkedMost = (colleagues) => {
+        let uniques = [];
+        const uniqueEmployees = colleagues.map(obj => obj.employees);
+        uniqueEmployees.forEach(employees => {
+            if (!uniques.some(pair => pair.includes(employees[0]) && pair.includes(employees[1]))) {
+                uniques.push(employees);
+            }
+        })
         let mostWorkedDays = 0;
         let mostWorkedColleagues = [];
 
-        for (let i = 0; i < colleagues.length; i++) {
-            const pair = colleagues[i];
-            if (pair.workedDays > mostWorkedDays) {
-                mostWorkedDays = pair.workedDays;
-                mostWorkedColleagues = pair.employees;
+        uniques.forEach(pairs => {
+            let totalDays = 0;
+            let workers;
+            for (let i = 0; i < colleagues.length; i++) {
+                const pair = colleagues[i];
+                if (pair.employees[0] === pairs[0] && pair.employees[1] === pairs[1]){
+                    totalDays += pair.workedDays;
+                    workers = pair.employees;
+                }
             }
-        }
+            if (totalDays > mostWorkedDays) {
+                mostWorkedDays = totalDays;
+                mostWorkedColleagues = workers;
+            }
+        })
         setWorkedTogether(getCommonProjects(mostWorkedColleagues, colleagues));
     }
 
