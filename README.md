@@ -11,6 +11,8 @@ An application that identifies the pair of employees who have worked together on
    - DateFrom
    - DateTo (It is acceptable to have a null value. If null is provided, the current date will be used.)
 
+   Note: In the `src` folder, you can find some sample CSV files in the `MockData` folder to test the application.
+
 2. After uploading the file, the application will find the pair that has worked on common projects for the longest period of time. It will display their shared work on different projects in a table format, along with the total number of days they have worked together.
 
 3. If no pair is found, an error message will be displayed: "No one worked on the same project!"
