@@ -1,158 +1,21 @@
-import moment from 'moment/moment';
 import { useState } from 'react';
 import TableComponent from './Table';
 import Form from 'react-bootstrap/Form';
 import { Alert } from 'react-bootstrap';
+import { parseFileToObjects, findColleaguesWithCommonProjects } from './Utils';
 
 export default function CsvImporter() {
     const [workedTogether, setWorkedTogether] = useState([]);
     const [errorMessage, setErrorMessage] = useState("");
 
-    const findColleaguesWithCommonProjects = (allEmployees) => {
-        const projectIds = getProjectIds(allEmployees);
-        const colleagues = [];
-        projectIds.forEach(projectID => {
-            const workedOnCommonProject = findColleaguesByProject(allEmployees, projectID);
-            colleagues.push(...workedOnCommonProject);
-        })
-        if (colleagues.length < 1) {
-            handleError("No one worked on the same project!");
-        } else {
-            findWhoWorkedMost(colleagues);
-        }
-    }
-
-    const findColleaguesByProject = (employees, projectID) => {
-        const projectEmployees = employees.filter(employee => employee.ProjectID === projectID);
-        const colleagues = [];
-
-        for (let i = 0; i < projectEmployees.length; i++) {
-            const employeeA = projectEmployees[i];
-
-            for (let j = i + 1; j < projectEmployees.length; j++) {
-                const employeeB = projectEmployees[j];
-                if (employeeA.DateFrom <= employeeB.DateTo && employeeB.DateFrom <= employeeA.DateTo) {
-                    const mutualWorkedDays = calculateMutualWorkedDays(employeeA, employeeB);
-                    const { startDate, endDate } = getCommonWorkPeriod(employeeA, employeeB);
-                    colleagues.push({
-                        employees: [employeeA.EmpID, employeeB.EmpID],
-                        workedDays: mutualWorkedDays,
-                        projectID: projectID,
-                        period: `${moment(startDate).format("YYYY-MM-DD")} - ${moment(endDate).format("YYYY-MM-DD")}`
-                    })
-                }
-            }
-        }
-        return colleagues;
-    };
-
-    const findWhoWorkedMost = (colleagues) => {
-        let uniques = [];
-        const uniqueEmployees = colleagues.map(obj => obj.employees);
-        uniqueEmployees.forEach(employees => {
-            if (!uniques.some(pair => pair.includes(employees[0]) && pair.includes(employees[1]))) {
-                uniques.push(employees);
-            }
-        })
-        let mostWorkedDays = 0;
-        let mostWorkedColleagues = [];
-
-        uniques.forEach(pairs => {
-            let totalDays = 0;
-            let workers;
-            for (let i = 0; i < colleagues.length; i++) {
-                const pair = colleagues[i];
-                if (pair.employees[0] === pairs[0] && pair.employees[1] === pairs[1]){
-                    totalDays += pair.workedDays;
-                    workers = pair.employees;
-                }
-            }
-            if (totalDays > mostWorkedDays) {
-                mostWorkedDays = totalDays;
-                mostWorkedColleagues = workers;
-            }
-        })
-        setWorkedTogether(getCommonProjects(mostWorkedColleagues, colleagues));
-    }
-
-    const getCommonProjects = (pair, colleagues) => {
-        const [employee1, employee2] = pair;
-        const filtered = colleagues.filter(pair => {
-            const [worker1, worker2] = pair.employees;
-            if (employee1 === worker1 &&
-                employee2 === worker2) {
-                return pair;
-            } else {
-                return false;
-            }
-        })
-        return filtered;
-    }
-
-    const calculateMutualWorkedDays = (employee, colleague) => {
-        const { startDate, endDate } = getCommonWorkPeriod(employee, colleague);
-        const includeEndDay = 1;
-        const totalDays = endDate.diff(startDate, "days") + includeEndDay;
-        return totalDays;
-    }
-
-    const getCommonWorkPeriod = (employee, colleague) => {
-        const startDate = moment.max(moment(employee.DateFrom), moment(colleague.DateFrom));
-        const endDate = moment.min(moment(employee.DateTo), moment(colleague.DateTo));
-        return { startDate, endDate };
-    }
-
-    const convertDateToStandardFormat = (employees) => {
-        employees.forEach((employee) => {
-            if (employee.DateTo.toLowerCase().includes("null")) {
-                employee.DateFrom = moment(new Date(employee.DateFrom));
-                employee.DateTo = moment(new Date());
-            } else {
-                employee.DateFrom = moment(new Date(employee.DateFrom));
-                employee.DateTo = moment(new Date(employee.DateTo));
-            }
-        })
-    }
-
-    const parseFileToObjects = (content) => {
-        const Papa = require('papaparse');
-        const { data } = Papa.parse(content, {
-            header: true,
-            skipEmptyLines: 'greedy',
-        });
-        const hasInvalidData = data.some(employee => {
-            if (!employee.EmpID ||
-                !employee.ProjectID ||
-                !moment(new Date(employee.DateFrom)).isValid() ||
-                (!moment(new Date(employee.DateTo)).isValid()
-                    && !employee.DateTo.toLowerCase().includes("null"))) {
-                handleError("Invalid data found in csv file!");
-                return true;
-            } else if (moment(new Date(employee.DateFrom)) > moment(new Date(employee.DateTo)) &&
-                !employee.DateTo.toLowerCase().includes("null")) {
-                handleError("Found in csv file end date to be less then start date!");
-                return true;
-            }
-            return false;
-        });
-
-        if (hasInvalidData) {
-            return [];
-        }
-        convertDateToStandardFormat(data);
-        return data;
-    };
-
-    const getProjectIds = (employers) => Array.from(new Set(employers.map(employee => employee.ProjectID)));
-
     const handleFileRead = (e) => {
         const content = e.target.result;
-        const employees = parseFileToObjects(content);
+        const employees = parseFileToObjects(content, handleError);
         if (!content) {
             handleError("No correct data found in csv file!");
             return;
         }
-        employees.length > 0 && findColleaguesWithCommonProjects(employees);
+        employees.length > 0 && setWorkedTogether(findColleaguesWithCommonProjects(employees, handleError));
     }
 
     const handleError = (errorMsg) => {
@@ -162,7 +25,10 @@ export default function CsvImporter() {
 
     const handleUpload = (e) => {
         const file = e.target.files[0];
-        if (file && file.type === "text/csv") {
+        if (!file) {
+            return;
+        }
+        if (file.type === "text/csv") {
             errorMessage && setErrorMessage("");
             const reader = new FileReader();
             reader.onload = handleFileRead;
